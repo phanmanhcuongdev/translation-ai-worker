@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+stack.env
+!stack.env.example
 
 # Python bytecode and caches
 __pycache__/
