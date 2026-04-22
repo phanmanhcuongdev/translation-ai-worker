@@ -1,0 +1,6 @@
+fastapi==0.123.8
+uvicorn[standard]==0.34.0
+pydantic-settings==2.7.1
+asyncpg==0.30.0
+aio-pika==9.5.4
+ollama==0.4.7
