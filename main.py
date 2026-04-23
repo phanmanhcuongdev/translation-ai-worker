@@ -84,7 +84,7 @@ async def health(response: Response) -> dict[str, Any]:
         "reply_queue": settings.rabbitmq_reply_queue_name,
         "dlq": settings.rabbitmq_dlq_name,
         "model": settings.ollama_model,
-        "target_lang_default": settings.translation_target_lang,
+        "reply_languages": ["vi", "en"],
         "ollama_num_ctx": settings.ollama_num_ctx,
         "max_content_chars": settings.max_content_chars,
         "gpu_advisory_lock_key": settings.gpu_advisory_lock_key,

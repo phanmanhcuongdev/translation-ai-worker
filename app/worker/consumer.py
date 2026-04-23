@@ -40,7 +40,6 @@ class TranslationTask:
     entity_type: EntityType
     content: str
     source_lang: str
-    target_lang: str
 
 
 class TranslationConsumer:
@@ -205,36 +204,34 @@ class TranslationConsumer:
                 len(task.content),
             )
 
-            cached_translation = await self._db_session.get_cached_translation(
+            cached_translation = await self._db_session.get_cached_translation_bundle(
                 hash_key=hash_key,
                 model_info=self._settings.ollama_model,
-                target_lang=task.target_lang,
             )
             if cached_translation is not None:
                 await self._publish_reply(
                     task=task,
-                    original_content=cached_translation["original_text"],
-                    translated_content=cached_translation["translated_text"],
+                    translated_content_vi=cached_translation["translated_content_vi"],
+                    translated_content_en=cached_translation["translated_content_en"],
                     source_lang=cached_translation["source_lang"],
-                    target_lang=cached_translation["target_lang"],
                 )
                 total_latency_ms = (time.perf_counter() - task_started_at) * 1000
                 logger.info(
-                    "Cache hit delivery_tag=%s entity_id=%s entity_type=%s hash_key=%s total_latency_ms=%.2f translated_chars=%d",
+                    "Cache hit delivery_tag=%s entity_id=%s entity_type=%s hash_key=%s total_latency_ms=%.2f chars_vi=%d chars_en=%d",
                     delivery_tag,
                     task.entity_id,
                     task.entity_type.value,
                     hash_key,
                     total_latency_ms,
-                    len(cached_translation["translated_text"]),
+                    len(cached_translation["translated_content_vi"]),
+                    len(cached_translation["translated_content_en"]),
                 )
                 await message.ack()
                 logger.info(
-                    "ACK cache-hit message delivery_tag=%s entity_id=%s entity_type=%s target_lang=%s",
+                    "ACK cache-hit message delivery_tag=%s entity_id=%s entity_type=%s",
                     delivery_tag,
                     task.entity_id,
                     task.entity_type.value,
-                    task.target_lang,
                 )
                 return
 
@@ -242,60 +239,57 @@ class TranslationConsumer:
             async with self._db_session.gpu_advisory_lock(
                 self._settings.gpu_advisory_lock_key
             ) as locked_connection:
-                cached_translation = await self._db_session.get_cached_translation(
+                cached_translation = await self._db_session.get_cached_translation_bundle(
                     hash_key=hash_key,
                     model_info=self._settings.ollama_model,
-                    target_lang=task.target_lang,
                     connection=locked_connection,
                 )
                 if cached_translation is not None:
                     await self._publish_reply(
                         task=task,
-                        original_content=cached_translation["original_text"],
-                        translated_content=cached_translation["translated_text"],
+                        translated_content_vi=cached_translation["translated_content_vi"],
+                        translated_content_en=cached_translation["translated_content_en"],
                         source_lang=cached_translation["source_lang"],
-                        target_lang=cached_translation["target_lang"],
                     )
                     total_latency_ms = (time.perf_counter() - task_started_at) * 1000
                     logger.info(
-                        "Cache filled while waiting for GPU lock delivery_tag=%s entity_id=%s entity_type=%s hash_key=%s total_latency_ms=%.2f translated_chars=%d",
+                        "Cache filled while waiting for GPU lock delivery_tag=%s entity_id=%s entity_type=%s hash_key=%s total_latency_ms=%.2f chars_vi=%d chars_en=%d",
                         delivery_tag,
                         task.entity_id,
                         task.entity_type.value,
                         hash_key,
                         total_latency_ms,
-                        len(cached_translation["translated_text"]),
+                        len(cached_translation["translated_content_vi"]),
+                        len(cached_translation["translated_content_en"]),
                     )
                     await message.ack()
                     logger.info(
-                        "ACK cache-filled message delivery_tag=%s entity_id=%s entity_type=%s target_lang=%s",
+                        "ACK cache-filled message delivery_tag=%s entity_id=%s entity_type=%s",
                         delivery_tag,
                         task.entity_id,
                         task.entity_type.value,
-                        task.target_lang,
                     )
                     return
 
                 translation = await self._ai_service.translate(
                     content=task.content,
-                    target_lang=task.target_lang,
+                    source_lang=task.source_lang,
                 )
 
-                await self._db_session.save_translation(
+                await self._db_session.save_translation_bundle(
                     hash_key=hash_key,
                     original_text=task.content,
-                    translated_text=translation.translated_text,
+                    translated_content_vi=translation.translated_content_vi,
+                    translated_content_en=translation.translated_content_en,
                     source_lang=translation.source_lang,
                     model_info=self._settings.ollama_model,
-                    target_lang=task.target_lang,
                     connection=locked_connection,
                 )
                 await self._publish_reply(
                     task=task,
-                    original_content=task.content,
-                    translated_content=translation.translated_text,
+                    translated_content_vi=translation.translated_content_vi,
+                    translated_content_en=translation.translated_content_en,
                     source_lang=translation.source_lang,
-                    target_lang=task.target_lang,
                 )
 
                 total_latency_ms = (time.perf_counter() - task_started_at) * 1000
@@ -311,11 +305,10 @@ class TranslationConsumer:
                 )
             await message.ack()
             logger.info(
-                "ACK translated message delivery_tag=%s entity_id=%s entity_type=%s target_lang=%s",
+                "ACK translated message delivery_tag=%s entity_id=%s entity_type=%s",
                 delivery_tag,
                 task.entity_id,
                 task.entity_type.value,
-                task.target_lang,
             )
         except OllamaResponseFormatError as exc:
             logger.exception(
@@ -392,10 +385,9 @@ class TranslationConsumer:
         self,
         *,
         task: TranslationTask,
-        original_content: str,
-        translated_content: str,
+        translated_content_vi: str,
+        translated_content_en: str,
         source_lang: str,
-        target_lang: str,
     ) -> None:
         if self._channel is None:
             raise RuntimeError("RabbitMQ channel has not been initialized")
@@ -403,10 +395,10 @@ class TranslationConsumer:
         payload = {
             "entity_id": task.entity_id,
             "entity_type": task.entity_type.value,
-            "original_content": original_content,
-            "translated_content": translated_content,
+            "translated_content_vi": translated_content_vi,
+            "translated_content_en": translated_content_en,
             "source_lang": source_lang,
-            "target_lang": target_lang,
+            "model_info": self._settings.ollama_model,
             "is_auto_translated": True,
         }
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -425,10 +417,9 @@ class TranslationConsumer:
             routing_key=self._settings.rabbitmq_reply_routing_key,
         )
         logger.info(
-            "\u0110\u00e3 tr\u1ea3 k\u1ebft qu\u1ea3 d\u1ecbch cho Entity [%s] v\u00e0o Reply Exchange entity_type=%s target_lang=%s source_lang=%s",
+            "\u0110\u00e3 tr\u1ea3 k\u1ebft qu\u1ea3 d\u1ecbch cho Entity [%s] v\u00e0o Reply Exchange entity_type=%s source_lang=%s",
             task.entity_id,
             task.entity_type.value,
-            target_lang,
             source_lang,
         )
 
@@ -539,14 +530,12 @@ class TranslationConsumer:
         entity_type = TranslationConsumer._extract_entity_type(payload)
         content = TranslationConsumer._extract_content(payload)
         source_lang = TranslationConsumer._extract_source_lang(payload)
-        target_lang = self._extract_target_lang(payload)
 
         return TranslationTask(
             entity_id=entity_id,
             entity_type=entity_type,
             content=content,
             source_lang=source_lang,
-            target_lang=target_lang,
         )
 
     @staticmethod
@@ -588,21 +577,6 @@ class TranslationConsumer:
         if language is None:
             raise InvalidMessageError("source_lang must be auto, vi, or en")
         return language
-
-    def _extract_target_lang(self, payload: dict[str, Any]) -> str:
-        for key in ("target_lang", "interface_lang", "browser_lang"):
-            value = payload.get(key)
-            if isinstance(value, str) and value.strip():
-                normalized = TranslationConsumer._normalize_language(value)
-                if normalized is not None:
-                    return normalized
-
-        normalized_default = TranslationConsumer._normalize_language(
-            self._settings.translation_target_lang
-        )
-        if normalized_default is None:
-            raise InvalidMessageError("Configured TRANSLATION_TARGET_LANG must be vi or en")
-        return normalized_default
 
     @staticmethod
     def _normalize_language(value: str) -> str | None:
