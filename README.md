@@ -18,7 +18,7 @@ Request body must be a JSON object:
 Supported fields:
 
 - `entity_id`: required, positive integer
-- `entity_type`: required, `FEEDBACK`, `QUESTION`, `SURVEY_DESCRIPTION`, or `SURVEY_TITLE`
+- `entity_type`: required, `FEEDBACK`, `QUESTION`, `SURVEY_DESCRIPTION`, `SURVEY_RESPONSE`, or `SURVEY_TITLE`
 - `content`: required, non-empty string
 - `source_lang`: optional, `auto`, `vi`, or `en`; defaults to `auto`
 

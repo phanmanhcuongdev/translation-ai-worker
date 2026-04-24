@@ -33,6 +33,7 @@ class EntityType(StrEnum):
     FEEDBACK = "FEEDBACK"
     QUESTION = "QUESTION"
     SURVEY_DESCRIPTION = "SURVEY_DESCRIPTION"
+    SURVEY_RESPONSE = "SURVEY_RESPONSE"
     SURVEY_TITLE = "SURVEY_TITLE"
 
 
@@ -559,7 +560,7 @@ class TranslationConsumer:
             return EntityType(value.upper())
         except ValueError as exc:
             raise InvalidMessageError(
-                "entity_type must be FEEDBACK, QUESTION, SURVEY_DESCRIPTION, or SURVEY_TITLE"
+                "entity_type must be FEEDBACK, QUESTION, SURVEY_DESCRIPTION, SURVEY_RESPONSE, or SURVEY_TITLE"
             ) from exc
 
     @staticmethod
