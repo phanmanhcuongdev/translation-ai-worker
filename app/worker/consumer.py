@@ -32,6 +32,8 @@ class InvalidMessageError(Exception):
 class EntityType(StrEnum):
     FEEDBACK = "FEEDBACK"
     QUESTION = "QUESTION"
+    SURVEY_DESCRIPTION = "SURVEY_DESCRIPTION"
+    SURVEY_TITLE = "SURVEY_TITLE"
 
 
 @dataclass(frozen=True)
@@ -556,7 +558,9 @@ class TranslationConsumer:
         try:
             return EntityType(value.upper())
         except ValueError as exc:
-            raise InvalidMessageError("entity_type must be FEEDBACK or QUESTION") from exc
+            raise InvalidMessageError(
+                "entity_type must be FEEDBACK, QUESTION, SURVEY_DESCRIPTION, or SURVEY_TITLE"
+            ) from exc
 
     @staticmethod
     def _extract_content(payload: dict[str, Any]) -> str:
